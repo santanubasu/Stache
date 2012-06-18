@@ -1,0 +1,359 @@
+<html>
+	<head>
+		<script src="../CommonJavascript/common.js" type="text/javascript"></script>
+		<script src="../BPlusJS/bplus.js" type="text/javascript"></script>
+		<script src="stache.js" type="text/javascript"></script>
+		<script type="text/javascript">
+			
+			function getRandomInt(min, max) {
+			    return Math.floor(Math.random() * (max - min + 1)) + min;
+			}
+			
+			// Define database and table specifications.
+			var db = new com.anvesaka.stache.LocalDatabase({
+				id:"db"
+			});
+			db.addTableSpec({
+				name:"com.anvesaka.stache.user",
+				schema:{
+					username:{
+						type:"string",
+						index:true
+					},
+					posts:{
+						type:"set",
+						association:"com.anvesaka.stache.post",
+						inverse:"author"
+					},
+					ratings:{
+						type:"set",
+						association:"com.anvesaka.stache.rating",
+						inverse:"rater"
+					},
+					follows:{
+						type:"set",
+						association:"com.anvesaka.stache.user"
+					},
+					friends:{
+						type:"set",
+						association:"com.anvesaka.stache.user",
+						inverse:"friends"
+					},
+					profile:{
+						type:"object",
+						association:"com.anvesaka.stache.profile",
+						inverse:"user"
+					}
+				}
+			});
+			db.addTableSpec({
+				name:"com.anvesaka.stache.profile",
+				schema:{
+					user:{
+						type:"object",
+						association:"com.anvesaka.stache.user",
+						inverse:"profile"
+					},
+					name:{
+						type:"string"
+					},
+					email:{
+						type:"string"
+					}
+				}
+			});
+			db.addTableSpec({
+				name:"com.anvesaka.stache.post",
+				schema:{
+					title:{
+						type:"string",
+						index:true,
+						unique:false
+					},
+					content:{
+						type:"string",
+						unique:false
+					},
+					author:{
+						type:"object",
+						association:"com.anvesaka.stache.user",
+						index:true,
+						unique:false,
+						inverse:"posts"
+					},
+					ratings:{
+						type:"set",
+						association:"com.anvesaka.stache.rating",
+						inverse:"post"
+					}
+				}
+			});
+			db.addTableSpec({
+				name:"com.anvesaka.stache.rating",
+				schema:{
+					value:{
+						type:"number",
+						index:true,
+						unique:false
+					},
+					post:{
+						type:"object",
+						association:"com.anvesaka.stache.post",
+						index:true,
+						unique:false,
+						inverse:"ratings"
+					},
+					rater:{
+						type:"object",
+						association:"com.anvesaka.stache.user",
+						index:true,
+						unique:false,
+						inverse:"ratings"
+					}
+				}
+			});
+			// Activate the database.
+			db.activate();
+			
+			var userTable = db.getTable("com.anvesaka.stache.user");
+			var profileTable = db.getTable("com.anvesaka.stache.profile");
+			var postTable = db.getTable("com.anvesaka.stache.post");
+			var ratingTable = db.getTable("com.anvesaka.stache.rating");
+			
+			var user;
+			var profile;
+			var post;
+			var rating;
+			
+			// Simple object creation
+			
+			var user1 = {
+				id:1,
+				username:"sbasu"
+			};
+			userTable.merge(user1);
+			user = userTable.get(["ID", 1]);
+			com.anvesaka.common.assert(user.getUsername()=="sbasu");			
+			com.anvesaka.common.assert(user.getId()==1);			
+			
+			// Entity idempotence
+			
+			userTable.merge(user1);
+			user = userTable.get(["ID", 1]);
+			com.anvesaka.common.assert(user.getUsername()=="sbasu");			
+			com.anvesaka.common.assert(user.getId()==1);			
+			
+			// Uniqueness 
+			
+			var user2 = {
+				id:2,
+				username:"sbasu"
+			};
+			try {
+				userTable.merge(user2);
+			}
+			catch (e) {
+				com.anvesaka.common.log(com.anvesaka.common.LOG_WARN, e.message);			
+			}
+			user2 = {
+				id:2,
+				username:"bledbetter"
+			};
+			userTable.merge(user2);
+			user = userTable.get(["ID", 2]);
+			com.anvesaka.common.assert(com.anvesaka.common.isDefined(user));			
+			com.anvesaka.common.assert(user.getId()==2);			
+			com.anvesaka.common.assert(user.getUsername()=="bledbetter");			
+			
+			// Simple object creation, association via construction
+			
+			var profile1 = {
+				id:1,
+				name:"Santanu Basu",
+				email:"santanu.basu@email.com",
+				user:user1
+			}
+			var profile2 = {
+				id:2,
+				name:"Brain Ledbetter",
+				email:"brian.ledbetter@email.com",
+				user:user2
+			}
+			profileTable.merge([profile1, profile2]);
+			com.anvesaka.common.assert(profile1.getUser().getId()==user1.getId());			
+			com.anvesaka.common.assert(user1.getProfile().getId()==profile1.getId());			
+			com.anvesaka.common.assert(profile2.getUser().getId()==user2.getId());			
+			com.anvesaka.common.assert(user2.getProfile().getId()==profile2.getId());			
+			
+			// Referential equivalence.
+			
+			profile = profileTable.get(["ID", 2]);
+			profile.setEmail("brian.ledbetter@beardhat.com");
+			com.anvesaka.common.assert(profile2.getEmail()=="brian.ledbetter@beardhat.com");			
+
+			// Compound object creation, implied associations
+			
+			var user3 = {
+				id:3,
+				username:"sabrams",
+				profile:{
+					id:3,
+					name:"Steve Abrams",
+					email:"steve.abrams@email.com"
+				}
+			};
+			var user4 = {
+				id:4,
+				username:"mberlan",
+				profile:{
+					id:4,
+					name:"Mike Berlan",
+					email:"mike.berlan@email.com"
+				}
+			};
+			userTable.merge([user3, user4]);
+			profile = profileTable.get(["ID", 3]);			
+			com.anvesaka.common.assert(com.anvesaka.common.isDefined(profile));			
+			com.anvesaka.common.assert(profile.getUser().getId()==user3.getId());			
+			com.anvesaka.common.assert(user3.getProfile().getId()==profile.getId());			
+
+			// Nested object modification
+			
+			userTable.merge({
+				id:4,
+				profile:{
+					id:4,
+					email:"mike.berlan@beardhat.com"
+				}
+			});
+			profile = profileTable.get(["ID", 4]);
+			com.anvesaka.common.assert(profile.getEmail()=="mike.berlan@beardhat.com");			
+			
+			// Self association, unidirectional
+			
+			user1.addFollows([user2, user3]);
+			com.anvesaka.common.assert(user1.getFollows().length==2);
+			com.anvesaka.common.assert(user2.getFollows().length==0);
+			
+			// Self association, bidirectional
+			
+			user2.addFriends([user3, user4]);
+			com.anvesaka.common.assert(user2.getFriends().length==2);
+			com.anvesaka.common.assert(user3.getFriends().length==1);
+			com.anvesaka.common.assert(user4.getFriends().length==1);
+						
+			// Set idempotence
+			
+			user2.addFriends([user3, user4]);
+			com.anvesaka.common.assert(user2.getFriends().length==2);
+			com.anvesaka.common.assert(user3.getFriends().length==1);
+			com.anvesaka.common.assert(user4.getFriends().length==1);
+
+			// Implicit set creation
+			
+			user4.addPosts([{
+				id:1,
+				title:"Post 1",
+				content:"Content 1",
+			}, 
+			{
+				id:2,
+				title:"Post 2",
+				content:"Content 2",
+			},
+			{
+				id:3,
+				title:"Post 3",
+				content:"Content 3",
+			}]);
+			com.anvesaka.common.assert(user4.getPosts().length==3);
+			post = postTable.get(["ID", 3]);
+			com.anvesaka.common.assert(post.getAuthor().getId()==user4.getId());
+			com.anvesaka.common.assert(post.getTitle()=="Post 3");
+
+			// Deletion, implicit dissociation
+			
+			postTable.remove(post);
+			post = postTable.get(["ID", 3]);
+			com.anvesaka.common.assert(com.anvesaka.common.isNotDefined(post));
+			com.anvesaka.common.assert(user4.getPosts().length==2);
+						
+			// More object creation...
+
+			var post1 = postTable.get(["ID", 1]);
+			var post2 = postTable.get(["ID", 2]);
+			ratingTable.merge({
+				id:1,
+				value:1.0,
+				rater:user1,
+				post:post1
+			});
+			ratingTable.merge({
+				id:2,
+				value:2.0,
+				rater:user2,
+				post:post1
+			});
+			ratingTable.merge({
+				id:3,
+				value:3.0,
+				rater:user3,
+				post:post1
+			});
+			ratingTable.merge({
+				id:4,
+				value:4.0,
+				rater:user4,
+				post:post1
+			});
+			ratingTable.merge({
+				id:5,
+				value:3.0,
+				rater:user4,
+				post:post2
+			});
+			
+			// Criteria querying
+
+			var ratings = ratingTable.list(["RANGE", "value", 0.0, 2.5]);
+			com.anvesaka.common.assert(ratings.length==2);
+			com.anvesaka.common.assert(ratings[0].getId()==1);
+			com.anvesaka.common.assert(ratings[1].getId()==2);
+			ratings = ratingTable.list(["AND", ["RANGE", "value", 0.0, 3.5], ["EQ", "rater", user4.getId()]]);
+			com.anvesaka.common.assert(ratings.length==1);
+			com.anvesaka.common.assert(ratings[0].getId()==5);
+			
+			var start;
+			var end;
+			var rating;
+			
+			
+			start = new Date().getTime();
+			for (var i=0; i<500000; i++) {
+				val = getRandomInt(0, 1000000);
+				rating = {
+					id:i,
+					value:val
+				}
+				ratingTable._private.indexes.value.add(rating);
+			}
+			end = new Date().getTime();	
+			com.anvesaka.common.log(com.anvesaka.common.LOG_INFO, "Direct index insertion of 500000 new random ratings: "+(end-start));
+			
+			start = new Date().getTime();
+			for (var i=0; i<500000; i++) {
+				val = getRandomInt(0, 1000000);
+				rating = {
+					id:i,
+					value:val
+				}
+				ratingTable.merge(rating);
+			}
+			end = new Date().getTime();	
+			com.anvesaka.common.log(com.anvesaka.common.LOG_INFO, "Merge of 500000 new random ratings: "+(end-start));
+			
+		</script>
+	</head>
+	<body>
+	</body>
+</html>
