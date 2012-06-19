@@ -2,7 +2,7 @@
  * TODO
  * Some parts of this class are highly inefficient and should be optimized later
  */
-com.anvesaka.common.namespace("com.anvesaka.stache").LocalIndex = Class.extend({
+com.anvesaka.common.namespace("com.anvesaka.stache").Index = Class.extend({
 	init:function(options) {
 		var thiz = this;
 		options = com.anvesaka.common.extend(true, {
@@ -88,7 +88,7 @@ com.anvesaka.common.namespace("com.anvesaka.stache").LocalIndex = Class.extend({
 	}
 });
 
-com.anvesaka.common.namespace("com.anvesaka.stache").LocalTable = Class.extend({
+com.anvesaka.common.namespace("com.anvesaka.stache").Table = Class.extend({
 	init:function(options) {
 		var thiz = this;
 		options = com.anvesaka.common.extend(true, {
@@ -125,7 +125,7 @@ com.anvesaka.common.namespace("com.anvesaka.stache").LocalTable = Class.extend({
 			thiz._private.schema[prop] = com.anvesaka.common.extend(true, {}, thiz._private.schemaDefaults, thiz._private.schema[prop]);
 			var propertyDef = thiz._private.schema[prop];
 			if (propertyDef.index) {
-				thiz._private.indexes[prop] = new com.anvesaka.stache.LocalIndex({
+				thiz._private.indexes[prop] = new com.anvesaka.stache.Index({
 					prop:prop,
 					pk:thiz._private.pk,
 					unique:com.anvesaka.common.isDefined(propertyDef.unique)?propertyDef.unique:true
@@ -540,7 +540,7 @@ com.anvesaka.common.namespace("com.anvesaka.stache").LocalTable = Class.extend({
 	}
 });
 
-com.anvesaka.common.namespace("com.anvesaka.stache").LocalDatabase = Class.extend({
+com.anvesaka.common.namespace("com.anvesaka.stache").Stache = Class.extend({
 	init:function(options) {
 		var thiz = this;
 		options = com.anvesaka.common.extend(true, {
@@ -568,7 +568,7 @@ com.anvesaka.common.namespace("com.anvesaka.stache").LocalDatabase = Class.exten
 	activate:function() {
 		for (var tableName in this._private.tableSpecs) {
 			var tableSpec = this._private.tableSpecs[tableName];
-			this._private.tables[tableName] = new com.anvesaka.stache.LocalTable(tableSpec);
+			this._private.tables[tableName] = new com.anvesaka.stache.Table(tableSpec);
 		}
 		for (var tableName in this._private.tableSpecs) {
 			this._private.tables[tableName].processSchema();
